@@ -182,7 +182,7 @@
   outline: none;
 }
 
-.composer-send {
+.composer-action {
   border: 1px solid rgba(255, 255, 255, 0.5);
   background: transparent;
   color: #ffffff;
@@ -197,19 +197,36 @@
   justify-content: center;
 }
 
-.composer-send:hover {
+.composer-action.is-stop {
+  border-color: rgba(255, 107, 107, 0.6);
+  background: rgba(255, 107, 107, 0.12);
+}
+
+.composer-action:hover {
   background: var(--surface-control-hover);
   color: #ffffff;
 }
 
-.composer-send svg {
+.composer-action.is-stop:hover {
+  background: rgba(255, 107, 107, 0.2);
+}
+
+.composer-action svg {
   width: 12px;
   height: 12px;
 }
 
-.composer-stop {
-  border: 1px solid rgba(255, 107, 107, 0.6);
-  background: rgba(255, 107, 107, 0.12);
+.composer-action-stop-square {
+  width: 6px;
+  height: 6px;
+  border-radius: 2px;
+  background: currentColor;
+}
+
+.composer-mic {
+  display: none;
+  border: 1px solid var(--border-strong);
+  background: transparent;
   color: #ffffff;
   padding: 0;
   border-radius: 999px;
@@ -221,15 +238,14 @@
   justify-content: center;
 }
 
-.composer-stop:hover {
-  background: rgba(255, 107, 107, 0.2);
+.composer-mic:hover {
+  background: var(--surface-control-hover);
 }
 
-.composer-stop-square {
-  width: 6px;
-  height: 6px;
-  border-radius: 2px;
-  background: currentColor;
+.composer-mic.is-active {
+  background: rgba(255, 214, 110, 0.2);
+  border-color: rgba(255, 214, 110, 0.5);
+  color: #ffd66e;
 }
 
 .composer.is-disabled {
@@ -242,7 +258,7 @@
   color: var(--text-fainter);
 }
 
-.composer-send:disabled {
+.composer-action:disabled {
   opacity: 0.5;
   cursor: not-allowed;
   background: var(--surface-control-disabled);
@@ -250,11 +266,19 @@
   border-color: var(--border-subtle);
 }
 
-.composer-stop:disabled {
+.composer-action.is-stop:disabled {
   opacity: 0.4;
   cursor: not-allowed;
   background: rgba(255, 107, 107, 0.08);
   color: rgba(255, 196, 196, 0.4);
+}
+
+.composer-mic:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+  background: var(--surface-control-disabled);
+  color: var(--text-fainter);
+  border-color: var(--border-subtle);
 }
 
 .composer-select:disabled {
