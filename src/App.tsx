@@ -57,6 +57,7 @@ import { useWorkspaceSelection } from "./hooks/useWorkspaceSelection";
 import { useNewAgentShortcut } from "./hooks/useNewAgentShortcut";
 import { useAgentSoundNotifications } from "./hooks/useAgentSoundNotifications";
 import { useWindowFocusState } from "./hooks/useWindowFocusState";
+import { useCopyThread } from "./hooks/useCopyThread";
 import { playNotificationSound } from "./utils/notificationSounds";
 import type { AccessMode, DiffLineReference, QueuedMessage, WorkspaceInfo } from "./types";
 
@@ -130,7 +131,7 @@ function MainApp() {
     debugOpen,
     setDebugOpen,
     debugEntries,
-    hasDebugAlerts,
+    showDebugButton,
     addDebugEntry,
     handleCopyDebug,
     clearDebugEntries
@@ -278,6 +279,12 @@ function MainApp() {
     customPrompts: prompts,
     onMessageActivity: refreshGitStatus
   });
+
+  const { handleCopyThread } = useCopyThread({
+    activeItems,
+    onDebug: addDebugEntry,
+  });
+
   const {
     activeImages,
     attachImages,
@@ -640,7 +647,7 @@ function MainApp() {
     handleApprovalDecision,
     onOpenSettings: handleOpenSettings,
     onOpenDebug: handleDebugClick,
-    hasDebugAlerts,
+    showDebugButton,
     onAddWorkspace: handleAddWorkspace,
     onSelectHome: selectHome,
     onSelectWorkspace: (workspaceId) => {
@@ -708,6 +715,7 @@ function MainApp() {
     branches,
     onCheckoutBranch: handleCheckoutBranch,
     onCreateBranch: handleCreateBranch,
+    onCopyThread: handleCopyThread,
     centerMode,
     onExitDiff: () => {
       setCenterMode("chat");
