@@ -1,7 +1,7 @@
 import { useEffect, useRef } from "react";
 import type { KeyboardEvent, RefObject } from "react";
 import type { AutocompleteItem } from "../hooks/useComposerAutocomplete";
-import { ImagePlus, Mic } from "lucide-react";
+import { ImagePlus } from "lucide-react";
 import { useComposerImageDrop } from "../hooks/useComposerImageDrop";
 import { ComposerAttachments } from "./ComposerAttachments";
 
@@ -70,9 +70,6 @@ export function ComposerInput({
     disabled,
     onAttachImages,
   });
-
-  const isDictationSupported = false;
-  const isDictationListening = false;
 
   useEffect(() => {
     if (!suggestionsOpen) {
@@ -231,14 +228,6 @@ export function ComposerInput({
             />
           </svg>
         )}
-      </button>
-      {/* WIP */}
-      <button
-        className={`composer-mic${isDictationListening ? " is-active" : ""}`}
-        disabled={disabled || !isDictationSupported}
-        aria-label="Dictation (coming soon)"
-      >
-        <Mic size={14} aria-hidden />
       </button>
     </div>
   );

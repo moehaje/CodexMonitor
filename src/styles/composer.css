@@ -66,7 +66,7 @@
 
 .composer-input {
   display: grid;
-  grid-template-columns: 1fr auto auto;
+  grid-template-columns: 1fr auto;
   gap: 12px;
   align-items: center;
 }
@@ -223,30 +223,6 @@
   background: currentColor;
 }
 
-.composer-mic {
-  display: none;
-  border: 1px solid var(--border-strong);
-  background: transparent;
-  color: #ffffff;
-  padding: 0;
-  border-radius: 999px;
-  cursor: pointer;
-  width: 24px;
-  height: 24px;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-}
-
-.composer-mic:hover {
-  background: var(--surface-control-hover);
-}
-
-.composer-mic.is-active {
-  background: rgba(255, 214, 110, 0.2);
-  border-color: rgba(255, 214, 110, 0.5);
-  color: #ffd66e;
-}
 
 .composer.is-disabled {
   opacity: 0.7;
@@ -273,13 +249,6 @@
   color: rgba(255, 196, 196, 0.4);
 }
 
-.composer-mic:disabled {
-  opacity: 0.5;
-  cursor: not-allowed;
-  background: var(--surface-control-disabled);
-  color: var(--text-fainter);
-  border-color: var(--border-subtle);
-}
 
 .composer-select:disabled {
   cursor: not-allowed;
