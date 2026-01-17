@@ -8,7 +8,7 @@ type UseHoldToDictateArgs = {
   state: DictationSessionState;
   preferredLanguage: string | null;
   holdKey: string;
-  startDictation: (preferredLanguage?: string | null) => void;
+  startDictation: (preferredLanguage: string | null) => void | Promise<void>;
   stopDictation: () => void;
   cancelDictation: () => void;
 };
