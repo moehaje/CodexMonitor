@@ -205,7 +205,7 @@ function MainApp() {
       if (event.key !== "Escape") {
         return;
       }
-      if (dictationState !== "listening") {
+      if (dictationState !== "listening" && dictationState !== "processing") {
         return;
       }
       event.preventDefault();

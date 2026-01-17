@@ -119,6 +119,7 @@ pub(crate) struct DictationState {
     pub(crate) download_task: Option<tokio::task::JoinHandle<()>>,
     pub(crate) session_state: DictationSessionState,
     pub(crate) session: Option<DictationSessionHandle>,
+    pub(crate) processing_cancel: Option<Arc<AtomicBool>>,
     pub(crate) cached_context: Option<CachedWhisperContext>,
 }
 
@@ -135,6 +136,7 @@ impl Default for DictationState {
             download_task: None,
             session_state: DictationSessionState::Idle,
             session: None,
+            processing_cancel: None,
             cached_context: None,
         }
     }
@@ -190,6 +192,23 @@ fn emit_status(app: &AppHandle, status: &DictationModelStatus) {
 
 fn emit_event(app: &AppHandle, event: DictationEvent) {
     let _ = app.emit("dictation-event", event);
+}
+
+async fn clear_processing_cancel(
+    app: &AppHandle,
+    cancel_flag: &Arc<AtomicBool>,
+) -> bool {
+    let state_handle = app.state::<AppState>();
+    let mut dictation = state_handle.dictation.lock().await;
+    if dictation
+        .processing_cancel
+        .as_ref()
+        .map_or(false, |flag| Arc::ptr_eq(flag, cancel_flag))
+    {
+        dictation.processing_cancel = None;
+        return true;
+    }
+    false
 }
 
 async fn update_status(
@@ -720,6 +739,7 @@ pub(crate) async fn dictation_stop(
     app: AppHandle,
     state: State<'_, AppState>,
 ) -> Result<DictationSessionState, String> {
+    let cancel_flag = Arc::new(AtomicBool::new(false));
     let (audio, sample_rate, model_id, preferred_language, stopped, stop_tx) = {
         let mut dictation = state.dictation.lock().await;
         if dictation.session_state != DictationSessionState::Listening {
@@ -728,6 +748,7 @@ pub(crate) async fn dictation_stop(
             return Err(message);
         }
         dictation.session_state = DictationSessionState::Processing;
+        dictation.processing_cancel = Some(Arc::clone(&cancel_flag));
         let session = dictation
             .session
             .take()
@@ -759,6 +780,10 @@ pub(crate) async fn dictation_stop(
             guard.clear();
             captured
         };
+        if cancel_flag.load(Ordering::Relaxed) {
+            clear_processing_cancel(&app_handle, &cancel_flag).await;
+            return;
+        }
 
         let state_handle = app_handle.state::<AppState>();
         let cached_context = {
@@ -851,6 +876,11 @@ pub(crate) async fn dictation_stop(
             Err(error) => Err(format!("Transcription task failed: {error}")),
         };
 
+        if cancel_flag.load(Ordering::Relaxed) {
+            clear_processing_cancel(&app_handle, &cancel_flag).await;
+            return;
+        }
+
         match outcome {
             Ok(text) => {
                 if !text.trim().is_empty() {
@@ -868,6 +898,7 @@ pub(crate) async fn dictation_stop(
             }
         }
 
+        clear_processing_cancel(&app_handle, &cancel_flag).await;
         let state_handle = app_handle.state::<AppState>();
         let mut dictation = state_handle.dictation.lock().await;
         dictation.session_state = DictationSessionState::Idle;
@@ -887,6 +918,28 @@ pub(crate) async fn dictation_cancel(
     app: AppHandle,
     state: State<'_, AppState>,
 ) -> Result<DictationSessionState, String> {
+    {
+        let mut dictation = state.dictation.lock().await;
+        if dictation.session_state == DictationSessionState::Processing {
+            if let Some(flag) = dictation.processing_cancel.take() {
+                flag.store(true, Ordering::Relaxed);
+            }
+            dictation.session_state = DictationSessionState::Idle;
+            emit_event(
+                &app,
+                DictationEvent::State {
+                    state: DictationSessionState::Idle,
+                },
+            );
+            emit_event(
+                &app,
+                DictationEvent::Canceled {
+                    message: "Canceled".to_string(),
+                },
+            );
+            return Ok(DictationSessionState::Idle);
+        }
+    }
     let (audio, stopped, stop_tx) = {
         let mut dictation = state.dictation.lock().await;
         if dictation.session_state != DictationSessionState::Listening {
