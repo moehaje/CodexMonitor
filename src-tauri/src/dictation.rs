@@ -660,6 +660,7 @@ pub(crate) async fn dictation_start(
 
     let audio = Arc::new(Mutex::new(Vec::new()));
     let (stop_tx, stop_rx) = mpsc::channel();
+    let stop_tx_thread = stop_tx.clone();
     let (ready_tx, ready_rx) = oneshot::channel();
     let (stopped_tx, stopped_rx) = oneshot::channel();
     let app_handle = app.clone();
@@ -671,6 +672,7 @@ pub(crate) async fn dictation_start(
             app_handle,
             audio_capture,
             stop_rx,
+            stop_tx_thread,
             stopped_tx,
             ready_tx,
         );
@@ -926,6 +928,7 @@ fn start_capture_thread(
     app: AppHandle,
     audio: Arc<Mutex<Vec<f32>>>,
     stop_rx: mpsc::Receiver<()>,
+    stop_tx: mpsc::Sender<()>,
     stopped_tx: oneshot::Sender<()>,
     ready_tx: oneshot::Sender<Result<u32, String>>,
 ) {
@@ -958,6 +961,7 @@ fn start_capture_thread(
     let channels = stream_config.channels as usize;
     let app_handle = app.clone();
     let audio_capture = audio.clone();
+    let stop_on_error = stop_tx.clone();
 
     let err_fn = move |error| {
         emit_event(
@@ -966,6 +970,29 @@ fn start_capture_thread(
                 message: format!("Microphone error: {error}"),
             },
         );
+        let _ = stop_on_error.send(());
+        let state_app = app_handle.clone();
+        tauri::async_runtime::spawn(async move {
+            let state_handle = state_app.state::<AppState>();
+            let should_emit = {
+                let mut dictation = state_handle.dictation.lock().await;
+                if dictation.session_state == DictationSessionState::Idle {
+                    false
+                } else {
+                    dictation.session_state = DictationSessionState::Idle;
+                    dictation.session = None;
+                    true
+                }
+            };
+            if should_emit {
+                emit_event(
+                    &state_app,
+                    DictationEvent::State {
+                        state: DictationSessionState::Idle,
+                    },
+                );
+            }
+        });
     };
 
     let level_value = Arc::new(AtomicU32::new(0));
