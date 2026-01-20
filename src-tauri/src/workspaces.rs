@@ -945,14 +945,21 @@ pub(crate) async fn rename_worktree(
             settings.codex_bin.clone()
         };
         let codex_home = resolve_workspace_codex_home(&entry_snapshot, Some(&parent.path));
-        let session =
-            spawn_workspace_session(entry_snapshot.clone(), default_bin, app, codex_home)
-                .await?;
-        state
-            .sessions
-            .lock()
-            .await
-            .insert(entry_snapshot.id.clone(), session);
+        match spawn_workspace_session(entry_snapshot.clone(), default_bin, app, codex_home).await {
+            Ok(session) => {
+                state
+                    .sessions
+                    .lock()
+                    .await
+                    .insert(entry_snapshot.id.clone(), session);
+            }
+            Err(error) => {
+                eprintln!(
+                    "rename_worktree: respawn failed for {} after rename: {error}",
+                    entry_snapshot.id
+                );
+            }
+        }
     }
 
     let connected = state.sessions.lock().await.contains_key(&entry_snapshot.id);
