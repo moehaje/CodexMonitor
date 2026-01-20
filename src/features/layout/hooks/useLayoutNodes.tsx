@@ -128,6 +128,11 @@ type LayoutNodesOptions = {
   isLoadingLocalUsage: boolean;
   localUsageError: string | null;
   onRefreshLocalUsage: () => void;
+  usageMetric: "tokens" | "time";
+  onUsageMetricChange: (metric: "tokens" | "time") => void;
+  usageWorkspaceId: string | null;
+  usageWorkspaceOptions: Array<{ id: string; label: string }>;
+  onUsageWorkspaceChange: (workspaceId: string | null) => void;
   onSelectHomeThread: (workspaceId: string, threadId: string) => void;
   activeWorkspace: WorkspaceInfo | null;
   activeParentWorkspace: WorkspaceInfo | null;
@@ -484,6 +489,11 @@ export function useLayoutNodes(options: LayoutNodesOptions): LayoutNodesResult {
       isLoadingLocalUsage={options.isLoadingLocalUsage}
       localUsageError={options.localUsageError}
       onRefreshLocalUsage={options.onRefreshLocalUsage}
+      usageMetric={options.usageMetric}
+      onUsageMetricChange={options.onUsageMetricChange}
+      usageWorkspaceId={options.usageWorkspaceId}
+      usageWorkspaceOptions={options.usageWorkspaceOptions}
+      onUsageWorkspaceChange={options.onUsageWorkspaceChange}
       onSelectThread={options.onSelectHomeThread}
     />
   );
@@ -531,6 +541,9 @@ export function useLayoutNodes(options: LayoutNodesOptions): LayoutNodesResult {
   const tabBarNode = (
     <TabBar activeTab={options.activeTab} onSelect={options.onSelectTab} />
   );
+
+  const sidebarSelectedDiffPath =
+    options.centerMode === "diff" ? options.selectedDiffPath : null;
 
   let gitDiffPanelNode: ReactNode;
   if (options.filePanelMode === "files" && options.activeWorkspace) {
@@ -583,7 +596,7 @@ export function useLayoutNodes(options: LayoutNodesOptions): LayoutNodesResult {
         stagedFiles={options.gitStatus.stagedFiles}
         unstagedFiles={options.gitStatus.unstagedFiles}
         onSelectFile={options.onSelectDiff}
-        selectedPath={options.selectedDiffPath}
+        selectedPath={sidebarSelectedDiffPath}
         logEntries={options.gitLogEntries}
         logTotal={options.gitLogTotal}
         logAhead={options.gitLogAhead}
