@@ -158,6 +158,7 @@ export function WorkspaceHome({
     setText: onPromptChange,
     setSelectionStart,
   });
+  const isDictationBusy = dictationState !== "idle";
 
   useEffect(() => {
     setShowIcon(true);
@@ -178,11 +179,16 @@ export function WorkspaceHome({
     if (!caret) {
       return;
     }
+    const textareaRect = textarea.getBoundingClientRect();
+    const container = textarea.closest(".composer-input");
+    const containerRect = container?.getBoundingClientRect();
+    const offsetLeft = textareaRect.left - (containerRect?.left ?? 0);
+    const offsetTop = textareaRect.top - (containerRect?.top ?? 0);
     const maxWidth = Math.min(textarea.clientWidth || 0, 420);
     const maxLeft = Math.max(0, (textarea.clientWidth || 0) - maxWidth);
-    const left = Math.min(Math.max(0, caret.left), maxLeft);
+    const left = Math.min(Math.max(0, caret.left), maxLeft) + offsetLeft;
     setSuggestionsStyle({
-      top: caret.top + caret.lineHeight + CARET_ANCHOR_GAP,
+      top: caret.top + caret.lineHeight + CARET_ANCHOR_GAP + offsetTop,
       left,
       bottom: "auto",
       right: "auto",
@@ -247,6 +253,9 @@ export function WorkspaceHome({
     if (!prompt.trim() && activeImages.length === 0) {
       return;
     }
+    if (isDictationBusy) {
+      return;
+    }
     await onStartRun(activeImages);
     clearActiveImages();
   };
@@ -257,6 +266,10 @@ export function WorkspaceHome({
       return;
     }
     if (event.key === "Enter" && !event.shiftKey) {
+      if (isDictationBusy) {
+        event.preventDefault();
+        return;
+      }
       event.preventDefault();
       void handleRunSubmit();
     }
@@ -543,12 +556,17 @@ export function WorkspaceHome({
                         {run.mode === "local" ? "Local" : "Worktree"} ·{" "}
                         {run.instances.length} instance
                         {run.instances.length === 1 ? "" : "s"}
+                        {run.status === "failed" && " · Failed"}
+                        {run.status === "partial" && " · Partial"}
                       </div>
                     </div>
                     <div className="workspace-home-run-time">
                       {formatRelativeTime(run.createdAt)}
                     </div>
                   </div>
+                  {run.error && (
+                    <div className="workspace-home-run-error">{run.error}</div>
+                  )}
                   {hasInstances ? (
                     <div className="workspace-home-instance-list">
                       {run.instances.map((instance) => {
@@ -588,6 +606,10 @@ export function WorkspaceHome({
                           </button>
                         );
                       })}
+                    </div>
+                  ) : run.status === "failed" ? (
+                    <div className="workspace-home-empty">
+                      No instances were started.
                     </div>
                   ) : (
                     <div className="workspace-home-empty">

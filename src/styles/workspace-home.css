@@ -52,6 +52,10 @@
   border-radius: 10px;
 }
 
+.workspace-home .composer-input {
+  position: relative;
+}
+
 .workspace-home-error {
   font-size: 12px;
   color: var(--text-danger);
@@ -233,6 +237,15 @@
 .workspace-home-run-meta {
   font-size: 12px;
   color: var(--text-muted);
+}
+
+.workspace-home-run-error {
+  font-size: 12px;
+  color: var(--text-danger);
+  background: rgba(236, 72, 153, 0.08);
+  border-radius: 10px;
+  padding: 6px 10px;
+  border: 1px solid rgba(236, 72, 153, 0.2);
 }
 
 .workspace-home-run-time {

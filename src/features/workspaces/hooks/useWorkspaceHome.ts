@@ -21,6 +21,8 @@ export type WorkspaceHomeRun = {
   createdAt: number;
   mode: WorkspaceRunMode;
   instances: WorkspaceHomeRunInstance[];
+  status: "pending" | "ready" | "partial" | "failed";
+  error: string | null;
 };
 
 type UseWorkspaceHomeOptions = {
@@ -73,6 +75,19 @@ const buildRunTitle = (prompt: string) => {
   }
   return normalized;
 };
+
+const ALLOWED_PREFIXES = [
+  "feat",
+  "fix",
+  "chore",
+  "test",
+  "docs",
+  "refactor",
+  "perf",
+  "build",
+  "ci",
+  "style",
+];
 
 const PREFIX_RULES: Array<{ prefix: string; keywords: string[] }> = [
   { prefix: "test", keywords: ["test", "tests", "testing"] },
@@ -127,38 +142,22 @@ const normalizeWorktreeName = (value: string | null | undefined) => {
     return null;
   }
   const trimmed = value.trim().toLowerCase();
-  if (
-    trimmed.startsWith("fix/") ||
-    trimmed.startsWith("feat/") ||
-    trimmed.startsWith("chore/") ||
-    trimmed.startsWith("test/") ||
-    trimmed.startsWith("docs/") ||
-    trimmed.startsWith("refactor/") ||
-    trimmed.startsWith("perf/") ||
-    trimmed.startsWith("build/") ||
-    trimmed.startsWith("ci/") ||
-    trimmed.startsWith("style/")
-  ) {
-    return trimmed;
-  }
-  const dashPrefixes = [
-    ["fix-", "fix/"],
-    ["feat-", "feat/"],
-    ["chore-", "chore/"],
-    ["test-", "test/"],
-    ["docs-", "docs/"],
-    ["refactor-", "refactor/"],
-    ["perf-", "perf/"],
-    ["build-", "build/"],
-    ["ci-", "ci/"],
-    ["style-", "style/"],
-  ];
-  for (const [dash, slash] of dashPrefixes) {
-    if (trimmed.startsWith(dash)) {
-      return `${slash}${trimmed.slice(dash.length)}`;
+  for (const prefix of ALLOWED_PREFIXES) {
+    const prefixWithSlash = `${prefix}/`;
+    if (trimmed.startsWith(prefixWithSlash)) {
+      const remainder = trimmed.slice(prefixWithSlash.length).replace(/^\/+/, "");
+      return remainder ? `${prefixWithSlash}${remainder}` : null;
     }
   }
-  return `feat/${trimmed.replace(/^\//, "")}`;
+  for (const prefix of ALLOWED_PREFIXES) {
+    const dashPrefix = `${prefix}-`;
+    if (trimmed.startsWith(dashPrefix)) {
+      const remainder = trimmed.slice(dashPrefix.length).replace(/^\/+/, "");
+      return remainder ? `${prefix}/${remainder}` : null;
+    }
+  }
+  const fallback = trimmed.replace(/^\/+/, "");
+  return fallback ? `feat/${fallback}` : null;
 };
 
 export function useWorkspaceHome({
@@ -308,8 +307,12 @@ export function useWorkspaceHome({
     [activeWorkspaceId],
   );
 
-  const replaceRunInstances = useCallback(
-    (workspaceId: string, runId: string, instances: WorkspaceHomeRunInstance[]) => {
+  const updateRunState = useCallback(
+    (
+      workspaceId: string,
+      runId: string,
+      updates: Partial<WorkspaceHomeRun>,
+    ) => {
       setState((prev) => {
         const runsForWorkspace = prev.runsByWorkspace[workspaceId] ?? [];
         return {
@@ -317,7 +320,7 @@ export function useWorkspaceHome({
           runsByWorkspace: {
             ...prev.runsByWorkspace,
             [workspaceId]: runsForWorkspace.map((run) =>
-              run.id === runId ? { ...run, instances } : run,
+              run.id === runId ? { ...run, ...updates } : run,
             ),
           },
         };
@@ -370,6 +373,10 @@ export function useWorkspaceHome({
     setWorkspaceError(null);
 
     const runId = createRunId();
+    const runIdParts = runId.split("-");
+    const runSuffix = runIdParts.length
+      ? runIdParts[runIdParts.length - 1]
+      : runId.slice(-6);
     const fallbackTitle = buildRunTitle(prompt);
     const run: WorkspaceHomeRun = {
       id: runId,
@@ -379,6 +386,8 @@ export function useWorkspaceHome({
       createdAt: Date.now(),
       mode: runMode,
       instances: [],
+      status: "pending",
+      error: null,
     };
 
     setState((prev) => ({
@@ -391,86 +400,146 @@ export function useWorkspaceHome({
     }));
 
     let worktreeBaseName: string | null = null;
-    try {
-      const metadata = await generateRunMetadata(activeWorkspace.id, prompt);
-      if (metadata?.title && metadata.title.trim() !== fallbackTitle) {
-        updateRunTitle(activeWorkspaceId, runId, metadata.title.trim());
+    if (runMode === "local") {
+      void generateRunMetadata(activeWorkspace.id, prompt)
+        .then((metadata) => {
+          if (!metadata?.title) {
+            return;
+          }
+          const nextTitle = metadata.title.trim();
+          if (nextTitle && nextTitle !== fallbackTitle) {
+            updateRunTitle(activeWorkspaceId, runId, nextTitle);
+          }
+        })
+        .catch(() => {
+          // Metadata is best-effort for local runs.
+        });
+    } else {
+      try {
+        const metadata = await generateRunMetadata(activeWorkspace.id, prompt);
+        if (metadata?.title && metadata.title.trim() !== fallbackTitle) {
+          updateRunTitle(activeWorkspaceId, runId, metadata.title.trim());
+        }
+        worktreeBaseName = normalizeWorktreeName(metadata?.worktreeName) ?? null;
+      } catch {
+        // Best-effort fallback to local naming.
       }
-      worktreeBaseName = normalizeWorktreeName(metadata?.worktreeName) ?? null;
-    } catch {
-      // Best-effort fallback to local naming.
+      if (!worktreeBaseName) {
+        worktreeBaseName = buildWorktreeBranch(prompt);
+      }
     }
-    if (!worktreeBaseName) {
-      worktreeBaseName = buildWorktreeBranch(prompt);
-    }
+    const worktreeSlugBase = worktreeBaseName
+      ? `${worktreeBaseName}-${runSuffix}`
+      : null;
 
     const instances: WorkspaceHomeRunInstance[] = [];
+    let runError: string | null = null;
     try {
       if (runMode === "local") {
-        if (!activeWorkspace.connected) {
-          await connectWorkspace(activeWorkspace);
+        try {
+          if (!activeWorkspace.connected) {
+            await connectWorkspace(activeWorkspace);
+          }
+          const threadId = await startThreadForWorkspace(activeWorkspace.id, {
+            activate: false,
+          });
+          if (!threadId) {
+            throw new Error("Failed to start a local thread.");
+          }
+          await sendUserMessageToThread(activeWorkspace, threadId, prompt, images);
+          const model = selectedModelId ? modelLookup.get(selectedModelId) ?? null : null;
+          instances.push({
+            id: `${runId}-local-1`,
+            workspaceId: activeWorkspace.id,
+            threadId,
+            modelId: selectedModelId ?? null,
+            modelLabel: resolveModelLabel(model, "Default model"),
+            sequence: 1,
+          });
+        } catch (error) {
+          runError = error instanceof Error ? error.message : String(error);
         }
-        const threadId = await startThreadForWorkspace(activeWorkspace.id, {
-          activate: false,
-        });
-        if (!threadId) {
-          throw new Error("Failed to start a local thread.");
-        }
-        await sendUserMessageToThread(activeWorkspace, threadId, prompt, images);
-        const model = selectedModelId ? modelLookup.get(selectedModelId) ?? null : null;
-        instances.push({
-          id: `${runId}-local-1`,
-          workspaceId: activeWorkspace.id,
-          threadId,
-          modelId: selectedModelId ?? null,
-          modelLabel: resolveModelLabel(model, "Default model"),
-          sequence: 1,
-        });
       } else {
         let instanceCounter = 0;
+        let failureCount = 0;
+        const totalInstanceCount = selectedModels.reduce(
+          (sum, selection) => sum + selection.count,
+          0,
+        );
+        const branchBaseFallback = worktreeSlugBase ?? buildWorktreeBranch(prompt);
         for (const selection of selectedModels) {
           const label = resolveModelLabel(selection.model, selection.modelId);
           for (let index = 0; index < selection.count; index += 1) {
             instanceCounter += 1;
-            const branch =
-              instanceCounter === 1
-                ? worktreeBaseName
-                : `${worktreeBaseName}-${instanceCounter}`;
-            const worktreeWorkspace = await addWorktreeAgent(activeWorkspace, branch, {
-              activate: false,
-            });
-            if (!worktreeWorkspace) {
-              continue;
+            const instanceSuffix =
+              totalInstanceCount > 1 ? `-${instanceCounter}` : "";
+            const branch = `${branchBaseFallback}${instanceSuffix}`;
+            try {
+              const worktreeWorkspace = await addWorktreeAgent(
+                activeWorkspace,
+                branch,
+                { activate: false },
+              );
+              if (!worktreeWorkspace) {
+                throw new Error("Failed to create worktree.");
+              }
+              if (!worktreeWorkspace.connected) {
+                await connectWorkspace(worktreeWorkspace);
+              }
+              const threadId = await startThreadForWorkspace(worktreeWorkspace.id, {
+                activate: false,
+              });
+              if (!threadId) {
+                throw new Error("Failed to start a worktree thread.");
+              }
+              await sendUserMessageToThread(
+                worktreeWorkspace,
+                threadId,
+                prompt,
+                images,
+                {
+                  model: selection.modelId,
+                  effort: null,
+                },
+              );
+              instances.push({
+                id: `${runId}-${selection.modelId}-${index + 1}`,
+                workspaceId: worktreeWorkspace.id,
+                threadId,
+                modelId: selection.modelId,
+                modelLabel: label,
+                sequence: index + 1,
+              });
+            } catch (error) {
+              failureCount += 1;
+              const message = error instanceof Error ? error.message : String(error);
+              runError ??= message;
             }
-            if (!worktreeWorkspace.connected) {
-              await connectWorkspace(worktreeWorkspace);
-            }
-            const threadId = await startThreadForWorkspace(worktreeWorkspace.id, {
-              activate: false,
-            });
-            if (!threadId) {
-              continue;
-            }
-            await sendUserMessageToThread(worktreeWorkspace, threadId, prompt, images, {
-              model: selection.modelId,
-              effort: null,
-            });
-            instances.push({
-              id: `${runId}-${selection.modelId}-${index + 1}`,
-              workspaceId: worktreeWorkspace.id,
-              threadId,
-              modelId: selection.modelId,
-              modelLabel: label,
-              sequence: index + 1,
-            });
           }
+        }
+        if (failureCount > 0) {
+          runError = `Started ${instances.length}/${totalInstanceCount} runs. ${failureCount} failed.`;
         }
       }
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
-      setWorkspaceError(message);
+      runError ??= message;
     } finally {
-      replaceRunInstances(activeWorkspaceId, runId, instances);
+      let status: WorkspaceHomeRun["status"] = "ready";
+      if (instances.length === 0) {
+        runError ??= "Failed to start any instances.";
+        status = "failed";
+      } else if (runError) {
+        status = "partial";
+      }
+      updateRunState(activeWorkspaceId, runId, {
+        instances,
+        status,
+        error: runError,
+      });
+      if (runError) {
+        setWorkspaceError(runError);
+      }
       setSubmitting(false);
     }
   }, [
@@ -482,7 +551,7 @@ export function useWorkspaceHome({
     isSubmitting,
     modelLookup,
     modelSelections,
-    replaceRunInstances,
+    updateRunState,
     runMode,
     selectedModelId,
     sendUserMessageToThread,
