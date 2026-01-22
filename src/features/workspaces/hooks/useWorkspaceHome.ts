@@ -1,5 +1,6 @@
 import { useCallback, useMemo, useState } from "react";
 import type { ModelOption, WorkspaceInfo } from "../../../types";
+import { generateRunMetadata } from "../../../services/tauri";
 
 export type WorkspaceRunMode = "local" | "worktree";
 
@@ -73,14 +74,45 @@ const buildRunTitle = (prompt: string) => {
   return normalized;
 };
 
-const buildWorktreeBranch = () => {
-  const date = new Date().toISOString().slice(0, 10);
-  const suffix = Math.random().toString(36).slice(2, 6);
-  return `codex/${date}-${suffix}`;
+const buildWorktreeBranch = (prompt: string) => {
+  const lower = prompt.toLowerCase();
+  const isFix =
+    lower.includes("fix") ||
+    lower.includes("bug") ||
+    lower.includes("error") ||
+    lower.includes("issue") ||
+    lower.includes("broken") ||
+    lower.includes("regression");
+  const base = prompt
+    .toLowerCase()
+    .replace(/[^a-z0-9\s-]/g, " ")
+    .trim()
+    .split(/\s+/)
+    .slice(0, 4)
+    .join("-");
+  const slug = base || `run-${Math.random().toString(36).slice(2, 6)}`;
+  return `${isFix ? "fix" : "feat"}/${slug}`;
 };
 
 const resolveModelLabel = (model: ModelOption | null, fallback: string) =>
   model?.displayName?.trim() || model?.model?.trim() || fallback;
+
+const normalizeWorktreeName = (value: string | null | undefined) => {
+  if (!value) {
+    return null;
+  }
+  const trimmed = value.trim().toLowerCase();
+  if (trimmed.startsWith("fix/") || trimmed.startsWith("feat/")) {
+    return trimmed;
+  }
+  if (trimmed.startsWith("fix-")) {
+    return `fix/${trimmed.slice(4)}`;
+  }
+  if (trimmed.startsWith("feat-")) {
+    return `feat/${trimmed.slice(5)}`;
+  }
+  return `feat/${trimmed.replace(/^\//, "")}`;
+};
 
 export function useWorkspaceHome({
   activeWorkspace,
@@ -247,6 +279,24 @@ export function useWorkspaceHome({
     [],
   );
 
+  const updateRunTitle = useCallback(
+    (workspaceId: string, runId: string, title: string) => {
+      setState((prev) => {
+        const runsForWorkspace = prev.runsByWorkspace[workspaceId] ?? [];
+        return {
+          ...prev,
+          runsByWorkspace: {
+            ...prev.runsByWorkspace,
+            [workspaceId]: runsForWorkspace.map((run) =>
+              run.id === runId ? { ...run, title } : run,
+            ),
+          },
+        };
+      });
+    },
+    [],
+  );
+
   const startRun = useCallback(async (images: string[] = []) => {
     if (!activeWorkspaceId || !activeWorkspace) {
       return;
@@ -273,10 +323,11 @@ export function useWorkspaceHome({
     setWorkspaceError(null);
 
     const runId = createRunId();
+    const fallbackTitle = buildRunTitle(prompt);
     const run: WorkspaceHomeRun = {
       id: runId,
       workspaceId: activeWorkspaceId,
-      title: buildRunTitle(prompt),
+      title: fallbackTitle,
       prompt,
       createdAt: Date.now(),
       mode: runMode,
@@ -291,6 +342,20 @@ export function useWorkspaceHome({
       },
       draftsByWorkspace: { ...prev.draftsByWorkspace, [activeWorkspaceId]: "" },
     }));
+
+    let worktreeBaseName: string | null = null;
+    try {
+      const metadata = await generateRunMetadata(activeWorkspace.id, prompt);
+      if (metadata?.title && metadata.title.trim() !== fallbackTitle) {
+        updateRunTitle(activeWorkspaceId, runId, metadata.title.trim());
+      }
+      worktreeBaseName = normalizeWorktreeName(metadata?.worktreeName) ?? null;
+    } catch {
+      // Best-effort fallback to local naming.
+    }
+    if (!worktreeBaseName) {
+      worktreeBaseName = buildWorktreeBranch(prompt);
+    }
 
     const instances: WorkspaceHomeRunInstance[] = [];
     try {
@@ -315,10 +380,15 @@ export function useWorkspaceHome({
           sequence: 1,
         });
       } else {
+        let instanceCounter = 0;
         for (const selection of selectedModels) {
           const label = resolveModelLabel(selection.model, selection.modelId);
           for (let index = 0; index < selection.count; index += 1) {
-            const branch = buildWorktreeBranch();
+            instanceCounter += 1;
+            const branch =
+              instanceCounter === 1
+                ? worktreeBaseName
+                : `${worktreeBaseName}-${instanceCounter}`;
             const worktreeWorkspace = await addWorktreeAgent(activeWorkspace, branch, {
               activate: false,
             });
@@ -372,6 +442,7 @@ export function useWorkspaceHome({
     setSubmitting,
     setWorkspaceError,
     startThreadForWorkspace,
+    updateRunTitle,
   ]);
 
   return {
