@@ -595,6 +595,11 @@ export function WorkspaceHome({
                           : status?.isReviewing
                             ? "Reviewing"
                             : "Idle";
+                        const stateClass = status?.isProcessing
+                          ? "is-running"
+                          : status?.isReviewing
+                            ? "is-reviewing"
+                            : "is-idle";
                         const isActive =
                           instance.threadId === activeThreadId &&
                           instance.workspaceId === activeWorkspaceId;
@@ -605,7 +610,7 @@ export function WorkspaceHome({
                             : instance.modelLabel;
                         return (
                           <button
-                            className={`workspace-home-instance${
+                            className={`workspace-home-instance ${stateClass}${
                               isActive ? " is-active" : ""
                             }`}
                             key={instance.id}
