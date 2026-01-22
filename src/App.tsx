@@ -1692,6 +1692,9 @@ function MainApp() {
       activeThreadId={activeThreadId}
       threadStatusById={threadStatusById}
       onSelectInstance={handleSelectWorkspaceInstance}
+      skills={skills}
+      prompts={prompts}
+      files={files}
       dictationEnabled={appSettings.dictationEnabled && dictationReady}
       dictationState={dictationState}
       dictationLevel={dictationLevel}

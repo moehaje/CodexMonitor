@@ -1,8 +1,15 @@
 import { useEffect, useMemo, useRef, useState, type KeyboardEvent } from "react";
 import { convertFileSrc } from "@tauri-apps/api/core";
-import type { DictationTranscript, ModelOption, WorkspaceInfo } from "../../../types";
+import type {
+  CustomPromptOption,
+  DictationTranscript,
+  ModelOption,
+  SkillOption,
+  WorkspaceInfo,
+} from "../../../types";
 import { ComposerInput } from "../../composer/components/ComposerInput";
 import { useComposerImages } from "../../composer/hooks/useComposerImages";
+import { useComposerAutocompleteState } from "../../composer/hooks/useComposerAutocompleteState";
 import type { DictationSessionState } from "../../../types";
 import type { WorkspaceHomeRun, WorkspaceRunMode } from "../hooks/useWorkspaceHome";
 import { formatRelativeTime } from "../../../utils/time";
@@ -37,6 +44,9 @@ type WorkspaceHomeProps = {
   activeThreadId: string | null;
   threadStatusById: Record<string, ThreadStatus>;
   onSelectInstance: (workspaceId: string, threadId: string) => void;
+  skills: SkillOption[];
+  prompts: CustomPromptOption[];
+  files: string[];
   dictationEnabled: boolean;
   dictationState: DictationSessionState;
   dictationLevel: number;
@@ -80,6 +90,9 @@ export function WorkspaceHome({
   activeThreadId,
   threadStatusById,
   onSelectInstance,
+  skills,
+  prompts,
+  files,
   dictationEnabled,
   dictationState,
   dictationLevel,
@@ -110,6 +123,26 @@ export function WorkspaceHome({
   } = useComposerImages({
     activeThreadId: null,
     activeWorkspaceId: workspace.id,
+  });
+  const {
+    isAutocompleteOpen,
+    autocompleteMatches,
+    highlightIndex,
+    setHighlightIndex,
+    applyAutocomplete,
+    handleInputKeyDown,
+    handleTextChange,
+    handleSelectionChange,
+  } = useComposerAutocompleteState({
+    text: prompt,
+    selectionStart,
+    disabled: isSubmitting,
+    skills,
+    prompts,
+    files,
+    textareaRef,
+    setText: onPromptChange,
+    setSelectionStart,
   });
 
   useEffect(() => {
@@ -179,6 +212,10 @@ export function WorkspaceHome({
   };
 
   const handleComposerKeyDown = (event: KeyboardEvent<HTMLTextAreaElement>) => {
+    handleInputKeyDown(event);
+    if (event.defaultPrevented) {
+      return;
+    }
     if (event.key === "Enter" && !event.shiftKey) {
       event.preventDefault();
       void handleRunSubmit();
@@ -253,22 +290,17 @@ export function WorkspaceHome({
             }}
             onAttachImages={attachImages}
             onRemoveAttachment={removeImage}
-            onTextChange={(next, cursor) => {
-              onPromptChange(next);
-              if (cursor !== null) {
-                setSelectionStart(cursor);
-              }
-            }}
-            onSelectionChange={setSelectionStart}
+            onTextChange={handleTextChange}
+            onSelectionChange={handleSelectionChange}
             onKeyDown={handleComposerKeyDown}
             isExpanded={false}
             onToggleExpand={undefined}
             textareaRef={textareaRef}
-            suggestionsOpen={false}
-            suggestions={[]}
-            highlightIndex={0}
-            onHighlightIndex={() => {}}
-            onSelectSuggestion={() => {}}
+            suggestionsOpen={isAutocompleteOpen}
+            suggestions={autocompleteMatches}
+            highlightIndex={highlightIndex}
+            onHighlightIndex={setHighlightIndex}
+            onSelectSuggestion={applyAutocomplete}
           />
         </div>
         {error && <div className="workspace-home-error">{error}</div>}
