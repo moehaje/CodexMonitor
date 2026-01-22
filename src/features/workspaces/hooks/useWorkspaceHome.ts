@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import type { ModelOption, WorkspaceInfo } from "../../../types";
 import { generateRunMetadata } from "../../../services/tauri";
 
@@ -195,6 +195,18 @@ export function useWorkspaceHome({
   const isSubmitting = activeWorkspaceId
     ? state.submittingByWorkspace[activeWorkspaceId] ?? false
     : false;
+
+  useEffect(() => {
+    if (!activeWorkspaceId || !activeWorkspace) {
+      return;
+    }
+    if ((activeWorkspace.kind ?? "main") === "worktree" && runMode !== "local") {
+      setState((prev) => ({
+        ...prev,
+        modeByWorkspace: { ...prev.modeByWorkspace, [activeWorkspaceId]: "local" },
+      }));
+    }
+  }, [activeWorkspace, activeWorkspaceId, runMode]);
 
   const modelLookup = useMemo(() => {
     const map = new Map<string, ModelOption>();

@@ -295,6 +295,7 @@ export function WorkspaceHome({
     }
     return `${selectedModels.length} models · ${totalInstances} runs`;
   })();
+  const showRunMode = (workspace.kind ?? "main") !== "worktree";
   const runModeLabel = runMode === "local" ? "Local" : "Worktree";
   const RunModeIcon = runMode === "local" ? Laptop : GitBranch;
 
@@ -361,69 +362,73 @@ export function WorkspaceHome({
       </div>
 
       <div className="workspace-home-controls">
-        <div className="open-app-menu workspace-home-control" ref={runModeRef}>
-          <div className="open-app-button">
-            <button
-              type="button"
-              className="ghost open-app-action"
-              onClick={() => {
-                setRunModeOpen((prev) => !prev);
-                setModelsOpen(false);
-              }}
-              aria-label="Select run mode"
-              data-tauri-drag-region="false"
-            >
-              <span className="open-app-label">
-                <RunModeIcon className="workspace-home-mode-icon" aria-hidden />
-                {runModeLabel}
-              </span>
-            </button>
-            <button
-              type="button"
-              className="ghost open-app-toggle"
-              onClick={() => {
-                setRunModeOpen((prev) => !prev);
-                setModelsOpen(false);
-              }}
-              aria-haspopup="menu"
-              aria-expanded={runModeOpen}
-              aria-label="Toggle run mode menu"
-              data-tauri-drag-region="false"
-            >
-              <ChevronDown size={14} aria-hidden />
-            </button>
-          </div>
-          {runModeOpen && (
-            <div className="open-app-dropdown workspace-home-dropdown" role="menu">
+        {showRunMode && (
+          <div className="open-app-menu workspace-home-control" ref={runModeRef}>
+            <div className="open-app-button">
               <button
                 type="button"
-                className={`open-app-option${runMode === "local" ? " is-active" : ""}`}
+                className="ghost open-app-action"
                 onClick={() => {
-                  onRunModeChange("local");
-                  setRunModeOpen(false);
+                  setRunModeOpen((prev) => !prev);
                   setModelsOpen(false);
                 }}
+                aria-label="Select run mode"
+                data-tauri-drag-region="false"
               >
-                <Laptop className="workspace-home-mode-icon" aria-hidden />
-                Local
+                <span className="open-app-label">
+                  <RunModeIcon className="workspace-home-mode-icon" aria-hidden />
+                  {runModeLabel}
+                </span>
               </button>
               <button
                 type="button"
-                className={`open-app-option${
-                  runMode === "worktree" ? " is-active" : ""
-                }`}
+                className="ghost open-app-toggle"
                 onClick={() => {
-                  onRunModeChange("worktree");
-                  setRunModeOpen(false);
+                  setRunModeOpen((prev) => !prev);
                   setModelsOpen(false);
                 }}
+                aria-haspopup="menu"
+                aria-expanded={runModeOpen}
+                aria-label="Toggle run mode menu"
+                data-tauri-drag-region="false"
               >
-                <GitBranch className="workspace-home-mode-icon" aria-hidden />
-                Worktree
+                <ChevronDown size={14} aria-hidden />
               </button>
             </div>
-          )}
-        </div>
+            {runModeOpen && (
+              <div className="open-app-dropdown workspace-home-dropdown" role="menu">
+                <button
+                  type="button"
+                  className={`open-app-option${
+                    runMode === "local" ? " is-active" : ""
+                  }`}
+                  onClick={() => {
+                    onRunModeChange("local");
+                    setRunModeOpen(false);
+                    setModelsOpen(false);
+                  }}
+                >
+                  <Laptop className="workspace-home-mode-icon" aria-hidden />
+                  Local
+                </button>
+                <button
+                  type="button"
+                  className={`open-app-option${
+                    runMode === "worktree" ? " is-active" : ""
+                  }`}
+                  onClick={() => {
+                    onRunModeChange("worktree");
+                    setRunModeOpen(false);
+                    setModelsOpen(false);
+                  }}
+                >
+                  <GitBranch className="workspace-home-mode-icon" aria-hidden />
+                  Worktree
+                </button>
+              </div>
+            )}
+          </div>
+        )}
 
         <div className="open-app-menu workspace-home-control" ref={modelsRef}>
           <div className="open-app-button">
