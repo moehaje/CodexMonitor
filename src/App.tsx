@@ -667,7 +667,6 @@ function MainApp() {
     isCompact,
     setActiveTab,
     setActiveWorkspaceId,
-    setActiveThreadId,
     updateWorkspaceSettings,
     setCenterMode,
     setSelectedDiffPath,
