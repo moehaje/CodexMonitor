@@ -38,7 +38,7 @@ type WorkspaceHomeProps = {
   runs: WorkspaceHomeRun[];
   prompt: string;
   onPromptChange: (value: string) => void;
-  onStartRun: (images?: string[]) => Promise<void>;
+  onStartRun: (images?: string[]) => Promise<boolean>;
   runMode: WorkspaceRunMode;
   onRunModeChange: (mode: WorkspaceRunMode) => void;
   models: ModelOption[];
@@ -256,8 +256,10 @@ export function WorkspaceHome({
     if (isDictationBusy) {
       return;
     }
-    await onStartRun(activeImages);
-    clearActiveImages();
+    const didStart = await onStartRun(activeImages);
+    if (didStart) {
+      clearActiveImages();
+    }
   };
 
   const handleComposerKeyDown = (event: KeyboardEvent<HTMLTextAreaElement>) => {

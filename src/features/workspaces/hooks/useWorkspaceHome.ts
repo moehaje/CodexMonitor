@@ -362,11 +362,12 @@ export function useWorkspaceHome({
 
   const startRun = useCallback(async (images: string[] = []) => {
     if (!activeWorkspaceId || !activeWorkspace) {
-      return;
+      return false;
     }
     const prompt = draft.trim();
-    if (!prompt || isSubmitting) {
-      return;
+    const hasImages = images.length > 0;
+    if ((!prompt && !hasImages) || isSubmitting) {
+      return false;
     }
 
     const selectedModels = Object.entries(modelSelections)
@@ -379,7 +380,7 @@ export function useWorkspaceHome({
 
     if (runMode === "worktree" && selectedModels.length === 0) {
       setWorkspaceError("Select at least one model to run in a worktree.");
-      return;
+      return false;
     }
 
     setSubmitting(true);
@@ -461,8 +462,14 @@ export function useWorkspaceHome({
           if (!threadId) {
             throw new Error("Failed to start a local thread.");
           }
-          await sendUserMessageToThread(activeWorkspace, threadId, prompt, images);
-          const model = selectedModelId ? modelLookup.get(selectedModelId) ?? null : null;
+          const localModel = selectedModelId
+            ? modelLookup.get(selectedModelId)?.model ?? null
+            : null;
+          await sendUserMessageToThread(activeWorkspace, threadId, prompt, images, {
+            model: localModel,
+          });
+          const model =
+            selectedModelId ? modelLookup.get(selectedModelId) ?? null : null;
           instances.push({
             id: `${runId}-local-1`,
             workspaceId: activeWorkspace.id,
@@ -515,7 +522,7 @@ export function useWorkspaceHome({
                 prompt,
                 images,
                 {
-                  model: selection.modelId,
+                  model: selection.model?.model ?? selection.modelId,
                   effort: null,
                 },
               );
@@ -561,6 +568,7 @@ export function useWorkspaceHome({
       }
       setSubmitting(false);
     }
+    return true;
   }, [
     activeWorkspace,
     activeWorkspaceId,
