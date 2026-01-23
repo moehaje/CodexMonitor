@@ -1378,6 +1378,7 @@ function MainApp() {
       exitDiffView();
       resetPullRequestSelection();
       selectWorkspace(workspaceId);
+      setActiveThreadId(null, workspaceId);
     },
     onConnectWorkspace: async (workspace) => {
       await connectWorkspace(workspace);
